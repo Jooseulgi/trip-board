@@ -7,7 +7,10 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // 앱 쿼리는 pgbouncer 커넥션 풀을 거치고,
+  // 마이그레이션은 풀을 통과하면 실패하므로 직접 연결을 따로 쓴다 (Neon이 둘 다 준다).
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Post {
