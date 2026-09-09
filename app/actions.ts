@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { DEFAULT_CATEGORY, isCategoryKey, isReaction } from "@/lib/categories";
 import { getMyName, toUserKey, writeMyName } from "@/lib/session";
-import { removeImage, saveImage } from "@/lib/storage";
+import { isManagedImageUrl, removeImage } from "@/lib/storage";
 
 export type ActionResult = { ok: boolean; error?: string };
 
@@ -59,44 +59,47 @@ export async function createPost(formData: FormData): Promise<ActionResult> {
   const link = normalizeLink(str(formData, "linkUrl"));
   if (link && typeof link !== "string") return { ok: false, error: link.error };
 
-  // 사진은 선택. 링크만 있는 글, 메모만 있는 글도 올릴 수 있다.
-  const files = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
-  if (files.length > MAX_IMAGES) {
+  // 사진은 /api/upload로 한 장씩 미리 올라오고 여기엔 URL만 넘어온다.
+  // (서버리스 함수의 4.5MB 본문 제한 때문에 한 요청에 다 담을 수 없다.)
+  // 사진은 선택이라 한 장도 없을 수 있다.
+  const urls = formData.getAll("imageUrls").map(String).filter(Boolean);
+  if (urls.length > MAX_IMAGES) {
     return { ok: false, error: `사진은 한 번에 ${MAX_IMAGES}장까지 올릴 수 있어요.` };
+  }
+  if (urls.some((url) => !isManagedImageUrl(url))) {
+    return { ok: false, error: "사진 주소가 올바르지 않아요. 다시 올려주세요." };
   }
 
   const sizes = formData.getAll("imageSizes").map(String);
-  const saved: { url: string; width: number | null; height: number | null; sort: number }[] = [];
-
-  for (const [index, file] of files.entries()) {
-    const result = await saveImage(file);
-    if ("error" in result) {
-      // 이미 저장한 파일은 지우고 통째로 실패시킨다 (반쯤 올라간 글이 남지 않도록)
-      await Promise.all(saved.map((s) => removeImage(s.url)));
-      return { ok: false, error: result.error };
-    }
+  const saved = urls.map((url, index) => {
     const [w, h] = (sizes[index] ?? "").split("x").map(Number);
-    saved.push({
-      url: result.url,
+    return {
+      url,
       width: Number.isFinite(w) && w > 0 ? Math.round(w) : null,
       height: Number.isFinite(h) && h > 0 ? Math.round(h) : null,
       sort: index,
-    });
-  }
+    };
+  });
 
   const rawCategory = str(formData, "category");
 
-  await prisma.post.create({
-    data: {
-      title,
-      place: str(formData, "place") || null,
-      memo: str(formData, "memo") || null,
-      linkUrl: link,
-      category: isCategoryKey(rawCategory) ? rawCategory : DEFAULT_CATEGORY,
-      authorName: author,
-      images: { create: saved },
-    },
-  });
+  try {
+    await prisma.post.create({
+      data: {
+        title,
+        place: str(formData, "place") || null,
+        memo: str(formData, "memo") || null,
+        linkUrl: link,
+        category: isCategoryKey(rawCategory) ? rawCategory : DEFAULT_CATEGORY,
+        authorName: author,
+        images: { create: saved },
+      },
+    });
+  } catch {
+    // 글이 안 만들어졌으면 먼저 올라간 사진은 주인 없는 파일이 되므로 지운다
+    await Promise.all(saved.map((image) => removeImage(image.url)));
+    return { ok: false, error: "저장에 실패했어요. 잠시 후 다시 시도해주세요." };
+  }
 
   revalidatePath("/");
   return { ok: true };

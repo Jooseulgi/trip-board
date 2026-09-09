@@ -7,9 +7,26 @@ import { pickImageFiles, processImage, type ProcessedImage } from "@/lib/process
 
 const MAX_IMAGES = 10;
 
+/** 업로드가 끝난 사진은 URL을 들고 있어서, 저장에 실패해 다시 눌러도 또 올리지 않는다. */
+type ComposerImage = ProcessedImage & { uploadedUrl?: string };
+
+async function uploadOne(image: ComposerImage): Promise<string> {
+  if (image.uploadedUrl) return image.uploadedUrl;
+  const body = new FormData();
+  body.append("image", image.blob, image.filename);
+  const response = await fetch("/api/upload", { method: "POST", body });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error ?? "사진을 올리지 못했어요.");
+  }
+  const { url } = (await response.json()) as { url: string };
+  return url;
+}
+
 export function Composer() {
   const [open, setOpen] = useState(false);
-  const [images, setImages] = useState<ProcessedImage[]>([]);
+  const [images, setImages] = useState<ComposerImage[]>([]);
+  const [uploaded, setUploaded] = useState(0);
   const [title, setTitle] = useState("");
   const [place, setPlace] = useState("");
   const [link, setLink] = useState("");
@@ -91,6 +108,7 @@ export function Composer() {
     setMemo("");
     setCategory(DEFAULT_CATEGORY);
     setError(null);
+    setUploaded(0);
     setOpen(false);
   }
 
@@ -102,19 +120,42 @@ export function Composer() {
       return;
     }
 
-    const formData = new FormData();
-    formData.set("title", title);
-    formData.set("place", place);
-    formData.set("linkUrl", link);
-    formData.set("memo", memo);
-    formData.set("category", category);
-    for (const image of images) {
-      formData.append("images", image.blob, image.filename);
-      formData.append("imageSizes", `${image.width}x${image.height}`);
-    }
-
     startTransition(async () => {
+      // 서버리스 함수의 본문 제한(4.5MB) 때문에 사진은 한 장씩 먼저 올리고
+      // 글 저장에는 URL만 넘긴다.
+      setUploaded(0);
+      const urls: string[] = [];
+      const uploadedImages = [...images];
+
+      for (const [index, image] of uploadedImages.entries()) {
+        try {
+          const url = await uploadOne(image);
+          uploadedImages[index] = { ...image, uploadedUrl: url };
+          urls.push(url);
+          setUploaded(index + 1);
+        } catch (uploadError) {
+          // 여기까지 올라간 사진은 URL을 기억해두고, 다시 누르면 나머지만 올린다
+          setImages(uploadedImages);
+          setUploaded(0);
+          setError(uploadError instanceof Error ? uploadError.message : "사진을 올리지 못했어요.");
+          return;
+        }
+      }
+      setImages(uploadedImages);
+
+      const formData = new FormData();
+      formData.set("title", title);
+      formData.set("place", place);
+      formData.set("linkUrl", link);
+      formData.set("memo", memo);
+      formData.set("category", category);
+      urls.forEach((url, index) => {
+        formData.append("imageUrls", url);
+        formData.append("imageSizes", `${uploadedImages[index].width}x${uploadedImages[index].height}`);
+      });
+
       const result = await createPost(formData);
+      setUploaded(0);
       if (result.ok) reset();
       else setError(result.error ?? "저장에 실패했어요.");
     });
@@ -301,7 +342,11 @@ export function Composer() {
             disabled={pending || processing}
             className="rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-accent-ink transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending ? "올리는 중…" : "보드에 올리기"}
+            {pending
+              ? images.length > 1 && uploaded < images.length
+                ? `사진 ${uploaded + 1}/${images.length} 올리는 중…`
+                : "올리는 중…"
+              : "보드에 올리기"}
           </button>
         </div>
       </div>

@@ -1,11 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  experimental: {
-    // 캡쳐 이미지는 브라우저에서 1600px로 줄여 보내지만,
-    // GIF처럼 원본 그대로 올라가는 경우를 위해 여유를 둔다.
-    serverActions: { bodySizeLimit: "12mb" },
-  },
+  // 사진은 /api/upload로 한 장씩 올라가고 서버 액션에는 URL만 실려서
+  // 본문이 작다. 기본값(1MB)으로 충분하다.
 };
 
 export default nextConfig;

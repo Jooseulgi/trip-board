@@ -58,3 +58,14 @@ export async function removeImage(url: string) {
   if (!url.startsWith("/uploads/")) return;
   await unlink(path.join(LOCAL_DIR, path.basename(url))).catch(() => {});
 }
+
+const LOCAL_URL = /^\/uploads\/[0-9a-f-]{36}\.(webp|jpg|png|gif)$/;
+const BLOB_URL = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/uploads\/[0-9a-f-]{36}\.(webp|jpg|png|gif)$/;
+
+/**
+ * 글을 저장할 때 넘어오는 이미지 URL이 우리가 방금 올린 것인지 확인한다.
+ * 클라이언트가 보내는 값이라 아무 주소나 들어올 수 있어서 형태를 검사한다.
+ */
+export function isManagedImageUrl(url: string) {
+  return LOCAL_URL.test(url) || BLOB_URL.test(url);
+}
