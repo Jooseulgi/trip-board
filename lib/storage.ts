@@ -21,7 +21,9 @@ const LOCAL_DIR = path.join(process.cwd(), "public", "uploads");
  * 다른 저장소로 옮기고 싶다면 이 파일만 고치면 된다.
  */
 function usingBlob() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  // 예전 방식은 BLOB_READ_WRITE_TOKEN, 요즘 Vercel Blob은 OIDC + BLOB_STORE_ID를 쓴다.
+  // 둘 중 하나만 있어도 Blob에 쓸 수 있다.
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 }
 
 export async function saveImage(file: File): Promise<{ url: string } | { error: string }> {
@@ -42,7 +44,8 @@ export async function saveImage(file: File): Promise<{ url: string } | { error: 
       return { url: blob.url };
     } catch (error) {
       console.error("[storage] Blob 업로드 실패", error);
-      return { error: "이미지를 저장하지 못했어요. 잠시 후 다시 시도해주세요." };
+      const detail = error instanceof Error ? error.message : String(error);
+      return { error: `이미지를 저장하지 못했어요. (${detail})` };
     }
   }
 
