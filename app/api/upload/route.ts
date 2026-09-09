@@ -18,10 +18,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "이미지가 없어요." }, { status: 400 });
   }
 
-  const result = await saveImage(file);
-  if ("error" in result) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+  try {
+    const result = await saveImage(file);
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    return NextResponse.json({ url: result.url });
+  } catch (error) {
+    // 예상 못 한 예외가 그대로 500으로 나가면 화면에 이유가 안 보인다
+    console.error("[api/upload] 실패", error);
+    return NextResponse.json({ error: "사진을 저장하지 못했어요." }, { status: 500 });
   }
-
-  return NextResponse.json({ url: result.url });
 }

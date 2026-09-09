@@ -40,14 +40,29 @@ export async function saveImage(file: File): Promise<{ url: string } | { error: 
         contentType: file.type,
       });
       return { url: blob.url };
-    } catch {
+    } catch (error) {
+      console.error("[storage] Blob 업로드 실패", error);
       return { error: "이미지를 저장하지 못했어요. 잠시 후 다시 시도해주세요." };
     }
   }
 
-  await mkdir(LOCAL_DIR, { recursive: true });
-  await writeFile(path.join(LOCAL_DIR, filename), Buffer.from(await file.arrayBuffer()));
-  return { url: `/uploads/${filename}` };
+  // 배포 환경은 파일 시스템이 읽기 전용이라 로컬 저장으로 넘어오면 안 된다.
+  // 여기 왔다는 건 Blob 저장소가 프로젝트에 연결되지 않았다는 뜻.
+  if (process.env.VERCEL) {
+    console.error("[storage] BLOB_READ_WRITE_TOKEN 없음 — Blob 저장소가 연결되지 않았습니다");
+    return {
+      error: "이미지 저장소가 아직 연결되지 않았어요. Vercel에서 Blob 저장소를 만들어 연결해주세요.",
+    };
+  }
+
+  try {
+    await mkdir(LOCAL_DIR, { recursive: true });
+    await writeFile(path.join(LOCAL_DIR, filename), Buffer.from(await file.arrayBuffer()));
+    return { url: `/uploads/${filename}` };
+  } catch (error) {
+    console.error("[storage] 로컬 저장 실패", error);
+    return { error: "이미지를 저장하지 못했어요." };
+  }
 }
 
 export async function removeImage(url: string) {
