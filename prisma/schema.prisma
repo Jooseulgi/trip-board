@@ -1,0 +1,70 @@
+// 여행 보드 스키마
+// 로컬 개발은 SQLite. 배포 시 provider를 "postgresql"로 바꾸고 DATABASE_URL만 교체하면 됩니다.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id         String    @id @default(cuid())
+  title      String
+  place      String?
+  category   String    @default("dessert")
+  memo       String?
+  imageUrl   String
+  imageW     Int?
+  imageH     Int?
+  authorName String
+  visitedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  comments  Comment[]
+  reactions Reaction[]
+  wishes    Wish[]
+
+  @@index([createdAt])
+  @@index([category])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  postId     String
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  postId    String
+  userKey   String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userKey, emoji])
+  @@index([postId])
+}
+
+model Wish {
+  id        String   @id @default(cuid())
+  postId    String
+  userKey   String
+  userName  String
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userKey])
+  @@index([postId])
+}

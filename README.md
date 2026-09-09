@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🧳 트립보드
 
-## Getting Started
+친구랑 같이 모으는 여행 위시리스트.
+인스타·지도에서 **캡쳐한 사진을 ⌘V로 붙여넣으면** 카드가 만들어지고,
+거기에 코멘트를 달면서 어디 갈지 같이 고르는 보드예요.
 
-First, run the development server:
+## 할 수 있는 것
+
+- **캡쳐 붙여넣기** — 페이지 어디서든 ⌘V. 드래그&드롭, 파일 선택도 됩니다.
+  올리기 전에 브라우저에서 1600px / WebP로 줄여서 보내기 때문에 업로드가 빠릅니다.
+- **카테고리 태그** — 디저트 / 카페 / 식당 / 명소 / 쇼핑 / 숙소 / 기타. 상단 칩으로 필터링.
+- **가고 싶어요** — 누가 찜했는지 이름이 카드에 뜹니다. `내가 찜한 곳`으로 모아보기.
+- **이모지 반응** — ❤️ 😍 🤤 👏 😂
+- **다녀왔어요 체크** — `아직 안 간 곳` 필터로 남은 곳만 보기.
+- **코멘트** — 글마다 대화. ⌘+Enter로 등록.
+
+## 시작하기
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+http://localhost:3000 을 열고 이름만 정하면 바로 시작됩니다.
+비밀번호는 없고, 이름은 쿠키에 저장돼요.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+첫 실행 전에 DB가 없다면 한 번만:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npx prisma migrate dev
+```
 
-## Learn More
+## 친구를 초대하려면
 
-To learn more about Next.js, take a look at the following resources:
+`npm run dev`는 내 컴퓨터에서만 도는 서버라, 링크를 공유하려면 셋 중 하나가 필요합니다.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **같은 와이파이** — `npm run dev -- -H 0.0.0.0` 으로 띄우고 `http://<내-아이피>:3000` 공유
+2. **터널** — `cloudflared tunnel --url http://localhost:3000` 같은 도구로 임시 주소 만들기
+   (도메인이 바뀌므로 `next.config.ts`의 `serverActions.allowedOrigins`에 그 도메인을 추가해야 글쓰기가 됩니다)
+3. **배포** — 아래 참고
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 배포할 때 바꿔야 하는 것
 
-## Deploy on Vercel
+로컬에서 바로 돌아가도록 SQLite + 로컬 파일 저장을 쓰고 있어요. 서버에 올릴 땐:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| 지금 | 배포용 |
+| --- | --- |
+| SQLite (`prisma/dev.db`) | Postgres — `prisma/schema.prisma`의 `provider`와 `DATABASE_URL`만 교체 |
+| `public/uploads/`에 파일 저장 | S3 / Cloudflare R2 / Supabase Storage — `app/actions.ts`의 `saveImage()` 한 곳만 수정 |
+| 쿠키에 이름만 저장 | 친구들만 들어오게 하려면 초대 코드나 실제 로그인 추가 |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> Vercel 같은 서버리스 환경은 파일 시스템이 요청마다 초기화돼서 `public/uploads` 방식이 동작하지 않습니다.
+> 그 경우 이미지 저장소부터 먼저 바꿔야 해요.
+
+## 구조
+
+```
+app/
+  actions.ts            서버 액션 — 글/코멘트/반응/찜 저장, 이미지 업로드
+  page.tsx              보드(피드) — 필터 + 작성창 + 카드 목록
+  posts/[id]/page.tsx   상세 — 큰 사진, 반응, 코멘트
+components/
+  Composer.tsx          캡쳐 붙여넣기 작성창 (⌘V / 드래그 / 파일 선택)
+  PostCard.tsx          피드 카드
+  WishButton.tsx        가고 싶어요 (낙관적 업데이트)
+  ReactionBar.tsx       이모지 반응
+  VisitedToggle.tsx     다녀왔어요
+  CommentForm.tsx       코멘트 입력
+lib/
+  posts.ts              조회 쿼리 + 화면용 데이터 변환
+  process-image.ts      브라우저에서 이미지 리사이즈/WebP 변환
+  session.ts            쿠키 기반 이름
+  categories.ts         카테고리 / 반응 정의
+prisma/schema.prisma    Post · Comment · Reaction · Wish
+```
+
+## 명령어
+
+| | |
+| --- | --- |
+| `npm run dev` | 개발 서버 |
+| `npm run build` | 프로덕션 빌드 |
+| `npm run typecheck` | 타입 체크 |
+| `npm run lint` | 린트 |
+| `npm run db:migrate` | 스키마 변경 후 마이그레이션 |
+| `npm run db:studio` | DB를 브라우저로 열어보기 |
+
+## 알아두면 좋은 것
+
+- **로그인이 없습니다.** 주소를 아는 사람은 누구나 이름을 정하고 글을 쓸 수 있어요.
+  친구끼리 쓰는 보드라 일부러 단순하게 뒀습니다. 공개된 곳에 올린다면 인증을 먼저 붙이세요.
+- 글과 코멘트는 **쓴 사람만** 지울 수 있습니다 (이름 기준).
+- `다녀왔어요`는 개인이 아니라 **보드 전체 상태**입니다. 한 명이 체크하면 모두에게 표시돼요.

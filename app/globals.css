@@ -1,26 +1,88 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f3eee6;
+  --ink: #23201c;
+  --muted: #7c736a;
+  --line: #e7e0d6;
+  --accent: #d8562f;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe9e1;
+  --wish: #e0396b;
+  --wish-soft: #fce4ec;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #15130f;
+    --surface: #1e1b16;
+    --surface-2: #26221c;
+    --ink: #f2ece2;
+    --muted: #a3988a;
+    --line: #302b23;
+    --accent: #ff7a4d;
+    --accent-ink: #23140d;
+    --accent-soft: #3a241a;
+    --wish: #ff6d97;
+    --wish-soft: #3a1c27;
   }
 }
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-wish: var(--wish);
+  --color-wish-soft: var(--wish-soft);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+    "Segoe UI", system-ui, "Malgun Gothic", sans-serif;
+}
+
+html {
+  color-scheme: light dark;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 카드 높이가 제각각이라 CSS 컬럼으로 메이슨리처럼 쌓는다 */
+.masonry {
+  column-gap: 1rem;
+}
+@media (min-width: 640px) {
+  .masonry {
+    column-count: 2;
+  }
+}
+@media (min-width: 1024px) {
+  .masonry {
+    column-count: 3;
+  }
+}
+.masonry > * {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+
+/* 붙여넣기 안내 등 화면에서 숨기되 스크린리더에는 남기기 */
+.sr-only-focusable:not(:focus):not(:focus-within) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }

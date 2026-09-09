@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 업로드된 이미지와 로컬 DB
+/public/uploads/*
+!/public/uploads/.gitkeep
+*.db
+*.db-journal
+!.env.example

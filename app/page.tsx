@@ -1,69 +1,71 @@
-import Image from "next/image";
+import { Composer } from "@/components/Composer";
+import { FilterBar } from "@/components/FilterBar";
+import { Header } from "@/components/Header";
+import { NameGate } from "@/components/NameGate";
+import { PostCard } from "@/components/PostCard";
+import { isCategoryKey } from "@/lib/categories";
+import { getCategoryCounts, getFeed } from "@/lib/posts";
+import { getMyName } from "@/lib/session";
 
-export default function Home() {
+function single(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function HomePage(props: PageProps<"/">) {
+  const myName = await getMyName();
+  if (!myName) return <NameGate />;
+
+  const searchParams = await props.searchParams;
+  const rawCategory = single(searchParams.cat);
+  const rawOnly = single(searchParams.only);
+
+  const category = isCategoryKey(rawCategory) ? rawCategory : undefined;
+  const only = rawOnly === "wish" || rawOnly === "todo" ? rawOnly : undefined;
+
+  const [posts, counts] = await Promise.all([
+    getFeed(myName, { category, only }),
+    getCategoryCounts(),
+  ]);
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+    <>
+      <Header name={myName} />
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+        <div className="flex flex-col gap-5">
+          <Composer />
+          <FilterBar category={category} only={only} counts={counts} total={total} />
+
+          {posts.length === 0 ? (
+            <EmptyState filtered={Boolean(category || only)} />
+          ) : (
+            <div className="masonry">
+              {posts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </div>
+          )}
         </div>
       </main>
+      <footer className="px-4 py-8 text-center text-xs text-muted">
+        캡쳐해서 ⌘V — 그게 전부예요.
+      </footer>
+    </>
+  );
+}
+
+function EmptyState({ filtered }: { filtered: boolean }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-line px-6 py-16 text-center">
+      <p className="text-3xl">{filtered ? "🔍" : "🍰"}</p>
+      <p className="mt-3 text-sm font-medium">
+        {filtered ? "여기엔 아직 아무것도 없어요." : "첫 번째 장소를 올려볼까요?"}
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        {filtered
+          ? "다른 필터를 눌러보세요."
+          : "인스타나 지도에서 캡쳐한 사진을 붙여넣으면 바로 카드가 만들어져요."}
+      </p>
     </div>
   );
 }
