@@ -56,8 +56,18 @@ npm run db:migrate   # 마이그레이션 생성 + 로컬 적용
 
 ### 3. Vercel Blob 붙이기
 
-같은 **Storage** 탭 → **Create** → **Blob**.
-`BLOB_READ_WRITE_TOKEN`이 자동으로 주입됩니다. 이미지는 여기에 올라갑니다.
+같은 **Storage** 탭 → **Create** → **Blob**. 이미지가 여기에 올라갑니다.
+
+저장소는 **public / private 중 하나로 만들어지고 나중에 바꾸기 번거로운데, 둘 다 지원합니다.**
+
+- **public** — Blob CDN 주소를 `<img>`에 그대로 씁니다. 가장 빠릅니다.
+- **private** — 주소로 바로 못 읽어서 `/api/image/<파일명>`이 대신 받아 흘려보냅니다.
+  파일명이 UUID라 `immutable`로 오래 캐시해두기 때문에, CDN이 받아둔 뒤로는
+  사진 한 장당 함수가 사실상 한 번만 돕니다.
+
+어느 쪽인지는 처음 업로드할 때 실제로 써보고 알아냅니다. 설정할 것은 없습니다.
+
+인증은 예전 방식(`BLOB_READ_WRITE_TOKEN`)과 요즘 방식(OIDC + `BLOB_STORE_ID`)을 모두 인식합니다.
 
 ### 4. 다시 배포
 
@@ -91,8 +101,11 @@ components/
   ReactionBar.tsx       이모지 반응
   VisitedToggle.tsx     다녀왔어요
   CommentForm.tsx       코멘트 입력
+app/api/
+  upload/route.ts       사진 한 장 저장 (서버리스 본문 제한 4.5MB 때문에 한 장씩)
+  image/[name]/route.ts private Blob 저장소일 때 사진을 대신 받아 흘려보냄
 lib/
-  storage.ts            이미지 저장 — Vercel Blob (로컬은 public/uploads)
+  storage.ts            이미지 저장 — Vercel Blob public/private 모두 지원 (로컬은 public/uploads)
   posts.ts              조회 쿼리 + 화면용 데이터 변환
   process-image.ts      브라우저에서 이미지 리사이즈/WebP 변환
   session.ts            쿠키 기반 이름
@@ -121,3 +134,5 @@ prisma/schema.prisma    Post · PostImage · Comment · Reaction · Wish
 - `다녀왔어요`는 개인이 아니라 **보드 전체 상태**입니다. 한 명이 체크하면 모두에게 표시돼요.
 - 사진 **순서는 올린 순서**로 고정입니다. 아직 끌어서 바꾸는 기능은 없어요.
 - 올린 뒤 **수정은 안 됩니다.** 고치려면 지우고 다시 올려야 해요.
+- 사진은 **한 장씩 나눠서** 서버로 갑니다. Vercel 함수가 요청 본문을 4.5MB까지만 받기 때문인데,
+  여러 장을 한 번에 보내면 `413`이 납니다. 붙여넣고 버튼 누르는 동작은 그대로예요.
