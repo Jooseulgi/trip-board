@@ -12,16 +12,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "닉네임을 먼저 정해주세요." }, { status: 401 });
   }
 
-  // 진단용(임시): 어떤 이름의 저장소 변수가 들어와 있는지 확인한다. 값은 절대 내보내지 않는다.
-  if (new URL(request.url).searchParams.has("diag")) {
-    return NextResponse.json({
-      blobVarNames: Object.keys(process.env).filter((k) => /BLOB/i.test(k)),
-      dbVarNames: Object.keys(process.env).filter((k) => /DATABASE|POSTGRES/i.test(k)),
-      onVercel: Boolean(process.env.VERCEL),
-      commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
-    });
-  }
-
   const formData = await request.formData();
   const file = formData.get("image");
   if (!(file instanceof File) || file.size === 0) {
