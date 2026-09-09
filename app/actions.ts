@@ -1,26 +1,16 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/db";
 import { DEFAULT_CATEGORY, isCategoryKey, isReaction } from "@/lib/categories";
 import { getMyName, toUserKey, writeMyName } from "@/lib/session";
+import { removeImage, saveImage } from "@/lib/storage";
 
 export type ActionResult = { ok: boolean; error?: string };
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 10;
-const ALLOWED_IMAGE_TYPES: Record<string, string> = {
-  "image/webp": "webp",
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-};
 
 function str(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -42,23 +32,6 @@ function normalizeLink(raw: string): string | null | { error: string } {
   }
   if (candidate.length > 2000) return { error: "링크가 너무 길어요." };
   return parsed.toString();
-}
-
-async function saveImage(file: File): Promise<{ url: string } | { error: string }> {
-  const ext = ALLOWED_IMAGE_TYPES[file.type];
-  if (!ext) return { error: "이미지 파일만 올릴 수 있어요 (png, jpg, webp, gif)." };
-  if (file.size > MAX_IMAGE_BYTES) return { error: "이미지가 너무 커요. 10MB 이하로 올려주세요." };
-
-  await mkdir(UPLOAD_DIR, { recursive: true });
-  const filename = `${randomUUID()}.${ext}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(UPLOAD_DIR, filename), bytes);
-  return { url: `/uploads/${filename}` };
-}
-
-async function removeUpload(url: string) {
-  if (!url.startsWith("/uploads/")) return;
-  await unlink(path.join(UPLOAD_DIR, path.basename(url))).catch(() => {});
 }
 
 /* ---------------------------------- 닉네임 --------------------------------- */
@@ -99,7 +72,7 @@ export async function createPost(formData: FormData): Promise<ActionResult> {
     const result = await saveImage(file);
     if ("error" in result) {
       // 이미 저장한 파일은 지우고 통째로 실패시킨다 (반쯤 올라간 글이 남지 않도록)
-      await Promise.all(saved.map((s) => removeUpload(s.url)));
+      await Promise.all(saved.map((s) => removeImage(s.url)));
       return { ok: false, error: result.error };
     }
     const [w, h] = (sizes[index] ?? "").split("x").map(Number);
@@ -138,7 +111,7 @@ export async function deletePost(formData: FormData) {
   if (!post || toUserKey(post.authorName) !== toUserKey(me)) return;
 
   await prisma.post.delete({ where: { id } });
-  await Promise.all(post.images.map((image) => removeUpload(image.url)));
+  await Promise.all(post.images.map((image) => removeImage(image.url)));
 
   revalidatePath("/");
   redirect("/");

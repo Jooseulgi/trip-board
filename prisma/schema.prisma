@@ -1,12 +1,12 @@
 // 여행 보드 스키마
-// 로컬 개발은 SQLite. 배포 시 provider를 "postgresql"로 바꾸고 DATABASE_URL만 교체하면 됩니다.
+// Postgres(Neon)를 로컬·배포 모두에서 사용합니다. 연결 문자열은 DATABASE_URL 하나로 관리.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

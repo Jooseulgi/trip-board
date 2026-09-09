@@ -22,41 +22,60 @@
 
 ## 시작하기
 
+이 프로젝트는 **Postgres(Neon) + Vercel Blob**을 씁니다. 로컬에서도 같은 DB를 바라봅니다.
+
 ```bash
 npm install
+vercel link          # 배포한 프로젝트와 연결 (처음 한 번)
+vercel env pull .env # DATABASE_URL, BLOB_READ_WRITE_TOKEN 받아오기
 npm run dev
 ```
 
-http://localhost:3000 을 열고 이름만 정하면 바로 시작됩니다.
-비밀번호는 없고, 이름은 쿠키에 저장돼요.
+`vercel env pull` 대신 `.env`에 직접 값을 채워도 됩니다. `.env.example`을 참고하세요.
 
-첫 실행 전에 DB가 없다면 한 번만:
+스키마를 바꿨다면:
 
 ```bash
-npx prisma migrate dev
+npm run db:migrate   # 마이그레이션 생성 + 로컬 적용
 ```
+
+> `BLOB_READ_WRITE_TOKEN`을 비워두면 이미지는 `public/uploads/`에 저장됩니다.
+> 로컬에서 토큰 없이 굴려보기 위한 길이고, **배포 환경에서는 동작하지 않습니다.**
+
+## Vercel에 배포하기
+
+### 1. 프로젝트 만들기
+
+[vercel.com/new](https://vercel.com/new)에서 이 GitHub 저장소를 import 합니다.
+첫 배포는 `DATABASE_URL`이 없어 **빌드가 실패하는 게 정상**입니다. 아래를 붙이고 다시 배포하세요.
+
+### 2. Neon Postgres 붙이기
+
+프로젝트 → **Storage** → **Create Database** → **Neon (Serverless Postgres)**.
+만들면 `DATABASE_URL`을 포함한 환경변수가 프로젝트에 자동으로 주입됩니다.
+
+### 3. Vercel Blob 붙이기
+
+같은 **Storage** 탭 → **Create** → **Blob**.
+`BLOB_READ_WRITE_TOKEN`이 자동으로 주입됩니다. 이미지는 여기에 올라갑니다.
+
+### 4. 다시 배포
+
+Deployments 탭에서 **Redeploy**. 빌드 스크립트가 `prisma migrate deploy`를 먼저 돌려
+테이블을 만든 뒤 앱을 빌드합니다. 이후 스키마를 바꿔 push하면 배포할 때 자동으로 반영돼요.
+
+### 왜 SQLite로는 안 되나
+
+Vercel은 요청마다 컨테이너가 새로 뜨고 사라져서 **파일에 무언가를 남길 수 없습니다.**
+DB 파일(SQLite)도, 업로드한 이미지(`public/uploads`)도 저장되지 않거나 즉시 사라집니다.
+그래서 DB와 이미지를 모두 바깥 서비스로 뺐습니다.
 
 ## 친구를 초대하려면
 
-`npm run dev`는 내 컴퓨터에서만 도는 서버라, 링크를 공유하려면 셋 중 하나가 필요합니다.
+배포한 주소를 그대로 보내주면 됩니다. 로그인이 없어서 이름만 정하면 바로 쓸 수 있어요.
 
-1. **같은 와이파이** — `npm run dev -- -H 0.0.0.0` 으로 띄우고 `http://<내-아이피>:3000` 공유
-2. **터널** — `cloudflared tunnel --url http://localhost:3000` 같은 도구로 임시 주소 만들기
-   (도메인이 바뀌므로 `next.config.ts`의 `serverActions.allowedOrigins`에 그 도메인을 추가해야 글쓰기가 됩니다)
-3. **배포** — 아래 참고
-
-## 배포할 때 바꿔야 하는 것
-
-로컬에서 바로 돌아가도록 SQLite + 로컬 파일 저장을 쓰고 있어요. 서버에 올릴 땐:
-
-| 지금 | 배포용 |
-| --- | --- |
-| SQLite (`prisma/dev.db`) | Postgres — `prisma/schema.prisma`의 `provider`와 `DATABASE_URL`만 교체 |
-| `public/uploads/`에 파일 저장 | S3 / Cloudflare R2 / Supabase Storage — `app/actions.ts`의 `saveImage()` 한 곳만 수정 |
-| 쿠키에 이름만 저장 | 친구들만 들어오게 하려면 초대 코드나 실제 로그인 추가 |
-
-> Vercel 같은 서버리스 환경은 파일 시스템이 요청마다 초기화돼서 `public/uploads` 방식이 동작하지 않습니다.
-> 그 경우 이미지 저장소부터 먼저 바꿔야 해요.
+로컬에서만 잠깐 같이 보려면 같은 와이파이에서 `npm run dev -- -H 0.0.0.0` 후
+`http://<내-아이피>:3000` 을 공유하는 방법도 있습니다.
 
 ## 구조
 
@@ -73,6 +92,7 @@ components/
   VisitedToggle.tsx     다녀왔어요
   CommentForm.tsx       코멘트 입력
 lib/
+  storage.ts            이미지 저장 — Vercel Blob (로컬은 public/uploads)
   posts.ts              조회 쿼리 + 화면용 데이터 변환
   process-image.ts      브라우저에서 이미지 리사이즈/WebP 변환
   session.ts            쿠키 기반 이름
@@ -89,7 +109,8 @@ prisma/schema.prisma    Post · PostImage · Comment · Reaction · Wish
 | `npm run build` | 프로덕션 빌드 |
 | `npm run typecheck` | 타입 체크 |
 | `npm run lint` | 린트 |
-| `npm run db:migrate` | 스키마 변경 후 마이그레이션 |
+| `npm run db:migrate` | 스키마 변경 후 마이그레이션 생성·적용 |
+| `npm run db:deploy` | 기존 마이그레이션만 적용 (배포 때 자동 실행) |
 | `npm run db:studio` | DB를 브라우저로 열어보기 |
 
 ## 알아두면 좋은 것
