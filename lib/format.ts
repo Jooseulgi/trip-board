@@ -9,3 +9,12 @@ export function relativeTime(date: Date) {
   if (day < 7) return `${day}일 전`;
   return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric" }).format(date);
 }
+
+/** 링크 칩에 보여줄 도메인 (www. 제거) */
+export function hostOf(url: string) {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}

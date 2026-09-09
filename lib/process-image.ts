@@ -1,6 +1,7 @@
 "use client";
 
 export type ProcessedImage = {
+  key: string;
   blob: Blob;
   filename: string;
   width: number;
@@ -19,6 +20,7 @@ export async function processImage(file: File): Promise<ProcessedImage> {
   if (file.type === "image/gif") {
     const size = await readSize(file);
     return {
+      key: crypto.randomUUID(),
       blob: file,
       filename: file.name || "image.gif",
       width: size.width,
@@ -46,6 +48,7 @@ export async function processImage(file: File): Promise<ProcessedImage> {
 
   const ext = encoded.type === "image/webp" ? "webp" : "jpg";
   return {
+    key: crypto.randomUUID(),
     blob: encoded,
     filename: `capture.${ext}`,
     width,
@@ -67,14 +70,14 @@ async function readSize(file: File) {
   return size;
 }
 
-/** 붙여넣기 / 드래그 이벤트에서 첫 번째 이미지 파일을 꺼냅니다. */
-export function pickImageFile(list: FileList | DataTransferItemList | null | undefined) {
-  if (!list) return null;
+/** 붙여넣기 / 드래그 이벤트에서 이미지 파일을 전부 꺼냅니다. */
+export function pickImageFiles(list: FileList | DataTransferItemList | null | undefined) {
+  if (!list) return [];
   const files: File[] = [];
   for (let i = 0; i < list.length; i += 1) {
     const entry = list[i];
     const file = entry instanceof File ? entry : (entry as DataTransferItem).getAsFile?.();
     if (file && file.type.startsWith("image/")) files.push(file);
   }
-  return files[0] ?? null;
+  return files;
 }

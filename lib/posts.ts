@@ -4,15 +4,16 @@ import { toUserKey } from "./session";
 
 export type ReactionTally = { emoji: ReactionEmoji; count: number; mine: boolean };
 
+export type PostImageView = { id: string; url: string; width: number | null; height: number | null };
+
 export type PostView = {
   id: string;
   title: string;
   place: string | null;
   memo: string | null;
   category: string;
-  imageUrl: string;
-  imageW: number | null;
-  imageH: number | null;
+  linkUrl: string | null;
+  images: PostImageView[];
   authorName: string;
   createdAt: Date;
   visitedAt: Date | null;
@@ -26,6 +27,7 @@ export type PostView = {
 
 const postInclude = {
   _count: { select: { comments: true } },
+  images: { orderBy: { sort: "asc" }, select: { id: true, url: true, width: true, height: true } },
   wishes: { select: { userKey: true, userName: true } },
   reactions: { select: { userKey: true, emoji: true } },
 } as const;
@@ -36,9 +38,8 @@ type RawPost = {
   place: string | null;
   memo: string | null;
   category: string;
-  imageUrl: string;
-  imageW: number | null;
-  imageH: number | null;
+  linkUrl: string | null;
+  images: PostImageView[];
   authorName: string;
   createdAt: Date;
   visitedAt: Date | null;
@@ -63,9 +64,8 @@ function toView(post: RawPost, myKey: string): PostView {
     place: post.place,
     memo: post.memo,
     category: post.category,
-    imageUrl: post.imageUrl,
-    imageW: post.imageW,
-    imageH: post.imageH,
+    linkUrl: post.linkUrl,
+    images: post.images,
     authorName: post.authorName,
     createdAt: post.createdAt,
     visitedAt: post.visitedAt,

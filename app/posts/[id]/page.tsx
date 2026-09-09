@@ -9,7 +9,7 @@ import { ReactionBar } from "@/components/ReactionBar";
 import { VisitedToggle } from "@/components/VisitedToggle";
 import { WishButton } from "@/components/WishButton";
 import { categoryOf } from "@/lib/categories";
-import { relativeTime } from "@/lib/format";
+import { hostOf, relativeTime } from "@/lib/format";
 import { getPost } from "@/lib/posts";
 import { getMyName } from "@/lib/session";
 
@@ -33,16 +33,35 @@ export default async function PostPage(props: PageProps<"/posts/[id]">) {
         </Link>
 
         <article className="mt-4 overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
-          <div className="flex justify-center bg-surface-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={post.imageUrl}
-              alt={post.title}
-              width={post.imageW ?? undefined}
-              height={post.imageH ?? undefined}
-              className="block h-auto max-h-[70vh] w-auto max-w-full"
-            />
-          </div>
+          {/* 일정표처럼 글씨가 빽빽한 캡쳐가 많아 상세에서는 자르지 않고 전체 폭으로 쌓는다.
+              한 장씩 눌러 원본을 새 탭에서 확대해 볼 수 있다. */}
+          {post.images.length > 0 && (
+            <div className="flex flex-col gap-1 bg-surface-2">
+              {post.images.map((image, index) => (
+                <a
+                  key={image.id}
+                  href={image.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative block"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={image.url}
+                    alt={`${post.title} 사진 ${index + 1}`}
+                    width={image.width ?? undefined}
+                    height={image.height ?? undefined}
+                    className="block h-auto w-full"
+                  />
+                  {post.images.length > 1 && (
+                    <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                      {index + 1} / {post.images.length}
+                    </span>
+                  )}
+                </a>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-col gap-4 p-5">
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -61,6 +80,19 @@ export default async function PostPage(props: PageProps<"/posts/[id]">) {
 
             {post.memo && (
               <p className="whitespace-pre-wrap text-sm leading-relaxed">{post.memo}</p>
+            )}
+
+            {post.linkUrl && (
+              <a
+                href={post.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-fit max-w-full items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-sm transition hover:border-accent hover:text-accent"
+              >
+                <span aria-hidden>🔗</span>
+                <span className="truncate">{hostOf(post.linkUrl)}</span>
+                <span className="text-xs text-muted">에서 열기</span>
+              </a>
             )}
 
             <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">

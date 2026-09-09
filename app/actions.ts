@@ -14,6 +14,7 @@ export type ActionResult = { ok: boolean; error?: string };
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES = 10;
 const ALLOWED_IMAGE_TYPES: Record<string, string> = {
   "image/webp": "webp",
   "image/jpeg": "jpg",
@@ -26,6 +27,23 @@ function str(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** "instagram.com/p/x" 처럼 스킴 없이 붙여넣는 경우가 많아 https를 붙여준다. */
+function normalizeLink(raw: string): string | null | { error: string } {
+  if (!raw) return null;
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return { error: "링크 주소를 다시 확인해주세요." };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { error: "http 또는 https 링크만 넣을 수 있어요." };
+  }
+  if (candidate.length > 2000) return { error: "링크가 너무 길어요." };
+  return parsed.toString();
+}
+
 async function saveImage(file: File): Promise<{ url: string } | { error: string }> {
   const ext = ALLOWED_IMAGE_TYPES[file.type];
   if (!ext) return { error: "이미지 파일만 올릴 수 있어요 (png, jpg, webp, gif)." };
@@ -36,6 +54,11 @@ async function saveImage(file: File): Promise<{ url: string } | { error: string 
   const bytes = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(UPLOAD_DIR, filename), bytes);
   return { url: `/uploads/${filename}` };
+}
+
+async function removeUpload(url: string) {
+  if (!url.startsWith("/uploads/")) return;
+  await unlink(path.join(UPLOAD_DIR, path.basename(url))).catch(() => {});
 }
 
 /* ---------------------------------- 닉네임 --------------------------------- */
@@ -60,28 +83,45 @@ export async function createPost(formData: FormData): Promise<ActionResult> {
   if (!title) return { ok: false, error: "제목을 적어주세요." };
   if (title.length > 80) return { ok: false, error: "제목은 80자까지만 가능해요." };
 
-  const image = formData.get("image");
-  if (!(image instanceof File) || image.size === 0) {
-    return { ok: false, error: "사진을 한 장 올려주세요." };
+  const link = normalizeLink(str(formData, "linkUrl"));
+  if (link && typeof link !== "string") return { ok: false, error: link.error };
+
+  // 사진은 선택. 링크만 있는 글, 메모만 있는 글도 올릴 수 있다.
+  const files = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length > MAX_IMAGES) {
+    return { ok: false, error: `사진은 한 번에 ${MAX_IMAGES}장까지 올릴 수 있어요.` };
   }
 
-  const saved = await saveImage(image);
-  if ("error" in saved) return { ok: false, error: saved.error };
+  const sizes = formData.getAll("imageSizes").map(String);
+  const saved: { url: string; width: number | null; height: number | null; sort: number }[] = [];
+
+  for (const [index, file] of files.entries()) {
+    const result = await saveImage(file);
+    if ("error" in result) {
+      // 이미 저장한 파일은 지우고 통째로 실패시킨다 (반쯤 올라간 글이 남지 않도록)
+      await Promise.all(saved.map((s) => removeUpload(s.url)));
+      return { ok: false, error: result.error };
+    }
+    const [w, h] = (sizes[index] ?? "").split("x").map(Number);
+    saved.push({
+      url: result.url,
+      width: Number.isFinite(w) && w > 0 ? Math.round(w) : null,
+      height: Number.isFinite(h) && h > 0 ? Math.round(h) : null,
+      sort: index,
+    });
+  }
 
   const rawCategory = str(formData, "category");
-  const width = Number(str(formData, "imageW"));
-  const height = Number(str(formData, "imageH"));
 
   await prisma.post.create({
     data: {
       title,
       place: str(formData, "place") || null,
       memo: str(formData, "memo") || null,
+      linkUrl: link,
       category: isCategoryKey(rawCategory) ? rawCategory : DEFAULT_CATEGORY,
-      imageUrl: saved.url,
-      imageW: Number.isFinite(width) && width > 0 ? Math.round(width) : null,
-      imageH: Number.isFinite(height) && height > 0 ? Math.round(height) : null,
       authorName: author,
+      images: { create: saved },
     },
   });
 
@@ -94,15 +134,11 @@ export async function deletePost(formData: FormData) {
   const id = str(formData, "postId");
   if (!me || !id) return;
 
-  const post = await prisma.post.findUnique({ where: { id } });
+  const post = await prisma.post.findUnique({ where: { id }, include: { images: true } });
   if (!post || toUserKey(post.authorName) !== toUserKey(me)) return;
 
   await prisma.post.delete({ where: { id } });
-
-  if (post.imageUrl.startsWith("/uploads/")) {
-    const filename = path.basename(post.imageUrl);
-    await unlink(path.join(UPLOAD_DIR, filename)).catch(() => {});
-  }
+  await Promise.all(post.images.map((image) => removeUpload(image.url)));
 
   revalidatePath("/");
   redirect("/");

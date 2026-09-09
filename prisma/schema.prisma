@@ -16,19 +16,32 @@ model Post {
   place      String?
   category   String    @default("dessert")
   memo       String?
-  imageUrl   String
-  imageW     Int?
-  imageH     Int?
+  linkUrl    String?
   authorName String
   visitedAt  DateTime?
   createdAt  DateTime  @default(now())
 
+  images    PostImage[]
   comments  Comment[]
   reactions Reaction[]
   wishes    Wish[]
 
   @@index([createdAt])
   @@index([category])
+}
+
+/// 한 글에 사진 여러 장. sort 순서대로 보여준다. 사진 없는 글도 허용.
+model PostImage {
+  id     String @id @default(cuid())
+  postId String
+  url    String
+  width  Int?
+  height Int?
+  sort   Int    @default(0)
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sort])
 }
 
 model Comment {
